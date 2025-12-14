@@ -246,23 +246,30 @@ class ImageAnalyzer {
     return 0.50;
   }
 
-  /// IMPROVED: Multi-point sampling for accurate liquid detection
+  /// ULTRA-ACCURATE: Multi-point sampling with horizontal averaging
   static Map<String, double> _detectGlassParts(img.Image image) {
     final height = image.height;
     final width = image.width;
 
-    // Sample at MULTIPLE vertical lines for better accuracy
+    // Sample at MORE vertical lines for better accuracy (5 points)
     final samplePositions = [
-      width * 0.45, // Left-center
+      width * 0.43, // Left
+      width * 0.47, // Left-center
       width * 0.50, // Exact center
-      width * 0.55, // Right-center
+      width * 0.53, // Right-center
+      width * 0.57, // Right
     ];
 
     List<double> detectedPositions = [];
 
     for (double xRatio in samplePositions) {
       final sampleX = xRatio.round().clamp(0, width - 1);
-      final position = _detectLiquidAtVerticalLine(image, sampleX, height);
+      final position = _detectLiquidAtVerticalLine(
+        image,
+        sampleX,
+        height,
+        width,
+      );
       if (position != null) {
         detectedPositions.add(position);
         print(
@@ -275,10 +282,20 @@ class ImageAnalyzer {
     if (detectedPositions.isNotEmpty) {
       detectedPositions.sort();
       final median = detectedPositions[detectedPositions.length ~/ 2];
+
+      // Additional refinement: average positions within 2% of median
+      final validPositions = detectedPositions
+          .where((p) => (p - median).abs() < 0.02)
+          .toList();
+
+      final finalPosition = validPositions.isNotEmpty
+          ? validPositions.reduce((a, b) => a + b) / validPositions.length
+          : median;
+
       print(
-        'Final liquid position (median): ${(median * 100).toStringAsFixed(1)}% from ${detectedPositions.length} samples',
+        'Final liquid position: ${(finalPosition * 100).toStringAsFixed(1)}% (from ${detectedPositions.length} samples, ${validPositions.length} valid)',
       );
-      return {'darkLiquidTop': median};
+      return {'darkLiquidTop': finalPosition};
     }
 
     // Fallback
@@ -286,98 +303,173 @@ class ImageAnalyzer {
     return {'darkLiquidTop': 0.50};
   }
 
-  /// Detect liquid position at a specific vertical line
+  /// Detect liquid position at a specific vertical line with horizontal averaging
   static double? _detectLiquidAtVerticalLine(
     img.Image image,
     int x,
     int height,
+    int width,
   ) {
     // Scan from TOP to BOTTOM
     // Strategy: Find foam first, then dark liquid below it
+    // Also check horizontal neighbors for better accuracy
 
     bool foundFoam = false;
     int foamStartY = 0;
+    final horizontalRadius = 3; // Check 3 pixels on each side
 
-    // Step 1: Find foam region (light/cream colored)
+    // Step 1: Find foam region (light/cream colored) with horizontal averaging
     for (int y = (height * 0.1).round(); y < (height * 0.7).round(); y++) {
-      final pixel = image.getPixel(x, y);
-      final r = pixel.r.toInt();
-      final g = pixel.g.toInt();
-      final b = pixel.b.toInt();
-      final brightness = (r + g + b) / 3;
+      int foamPixels = 0;
+      int totalPixels = 0;
 
-      // Foam: light colored (brightness 100-220) with yellow/cream tint
-      if (!foundFoam && brightness > 100 && brightness < 220) {
-        // Check for cream/yellow tint (R+G > B)
-        if ((r + g) / 2 > b * 1.05) {
-          foundFoam = true;
-          foamStartY = y;
-          break;
-        }
-      }
-    }
-
-    // Step 2: If foam found, scan below it for dark liquid
-    if (foundFoam) {
-      for (int y = foamStartY; y < (height * 0.9).round(); y++) {
-        final pixel = image.getPixel(x, y);
+      // Check horizontal neighbors
+      for (
+        int xOffset = -horizontalRadius;
+        xOffset <= horizontalRadius;
+        xOffset++
+      ) {
+        final checkX = (x + xOffset).clamp(0, width - 1);
+        final pixel = image.getPixel(checkX, y);
         final r = pixel.r.toInt();
         final g = pixel.g.toInt();
         final b = pixel.b.toInt();
         final brightness = (r + g + b) / 3;
+        totalPixels++;
 
-        // Very dark = black liquid (Guinness)
-        if (brightness < 50) {
-          // Verify it's consistently dark for next 15 pixels
-          int darkCount = 0;
+        // Foam: light colored (brightness 100-220) with yellow/cream tint
+        if (brightness > 100 && brightness < 220) {
+          // Check for cream/yellow tint (R+G > B)
+          if ((r + g) / 2 > b * 1.05) {
+            foamPixels++;
+          }
+        }
+      }
+
+      // If majority are foam pixels, we found foam region
+      if (!foundFoam && foamPixels > totalPixels * 0.6) {
+        foundFoam = true;
+        foamStartY = y;
+        break;
+      }
+    }
+
+    // Step 2: If foam found, scan below it for dark liquid with horizontal averaging
+    if (foundFoam) {
+      for (int y = foamStartY; y < (height * 0.9).round(); y++) {
+        int darkPixels = 0;
+        int totalPixels = 0;
+
+        // Check horizontal neighbors for dark liquid
+        for (
+          int xOffset = -horizontalRadius;
+          xOffset <= horizontalRadius;
+          xOffset++
+        ) {
+          final checkX = (x + xOffset).clamp(0, width - 1);
+          final pixel = image.getPixel(checkX, y);
+          final r = pixel.r.toInt();
+          final g = pixel.g.toInt();
+          final b = pixel.b.toInt();
+          final brightness = (r + g + b) / 3;
+          totalPixels++;
+
+          // Very dark = black liquid (Guinness)
+          if (brightness < 50) {
+            darkPixels++;
+          }
+        }
+
+        // If majority are dark, verify consistency below
+        if (darkPixels > totalPixels * 0.7) {
+          // Verify next 20 pixels are also consistently dark
+          int consistentDark = 0;
           for (
             int verifyY = y;
-            verifyY < (y + 15).clamp(0, height);
+            verifyY < (y + 20).clamp(0, height);
             verifyY++
           ) {
-            final verifyPixel = image.getPixel(x, verifyY);
-            final verifyBrightness =
-                (verifyPixel.r.toInt() +
-                    verifyPixel.g.toInt() +
-                    verifyPixel.b.toInt()) /
-                3;
-            if (verifyBrightness < 50) darkCount++;
+            int darkCount = 0;
+            for (
+              int xOffset = -horizontalRadius;
+              xOffset <= horizontalRadius;
+              xOffset++
+            ) {
+              final checkX = (x + xOffset).clamp(0, width - 1);
+              final verifyPixel = image.getPixel(checkX, verifyY);
+              final verifyBrightness =
+                  (verifyPixel.r.toInt() +
+                      verifyPixel.g.toInt() +
+                      verifyPixel.b.toInt()) /
+                  3;
+              if (verifyBrightness < 50) darkCount++;
+            }
+            if (darkCount > (horizontalRadius * 2 + 1) * 0.7) {
+              consistentDark++;
+            }
           }
 
-          // Need at least 10 dark pixels out of 15 (consistent dark region)
-          if (darkCount >= 10) {
+          // Need at least 15 out of 20 rows to be consistently dark
+          if (consistentDark >= 15) {
             return y / height;
           }
         }
       }
     } else {
-      // No foam found - directly look for dark liquid from top
+      // No foam found - directly look for dark liquid from top with horizontal averaging
       for (int y = (height * 0.2).round(); y < (height * 0.9).round(); y++) {
-        final pixel = image.getPixel(x, y);
-        final r = pixel.r.toInt();
-        final g = pixel.g.toInt();
-        final b = pixel.b.toInt();
-        final brightness = (r + g + b) / 3;
+        int darkPixels = 0;
+        int totalPixels = 0;
 
-        // Very dark = black liquid
-        if (brightness < 45) {
-          // Verify consistency
-          int darkCount = 0;
+        // Check horizontal neighbors
+        for (
+          int xOffset = -horizontalRadius;
+          xOffset <= horizontalRadius;
+          xOffset++
+        ) {
+          final checkX = (x + xOffset).clamp(0, width - 1);
+          final pixel = image.getPixel(checkX, y);
+          final r = pixel.r.toInt();
+          final g = pixel.g.toInt();
+          final b = pixel.b.toInt();
+          final brightness = (r + g + b) / 3;
+          totalPixels++;
+
+          // Very dark = black liquid
+          if (brightness < 45) {
+            darkPixels++;
+          }
+        }
+
+        // If majority are dark, verify consistency
+        if (darkPixels > totalPixels * 0.7) {
+          int consistentDark = 0;
           for (
             int verifyY = y;
-            verifyY < (y + 15).clamp(0, height);
+            verifyY < (y + 20).clamp(0, height);
             verifyY++
           ) {
-            final verifyPixel = image.getPixel(x, verifyY);
-            final verifyBrightness =
-                (verifyPixel.r.toInt() +
-                    verifyPixel.g.toInt() +
-                    verifyPixel.b.toInt()) /
-                3;
-            if (verifyBrightness < 45) darkCount++;
+            int darkCount = 0;
+            for (
+              int xOffset = -horizontalRadius;
+              xOffset <= horizontalRadius;
+              xOffset++
+            ) {
+              final checkX = (x + xOffset).clamp(0, width - 1);
+              final verifyPixel = image.getPixel(checkX, verifyY);
+              final verifyBrightness =
+                  (verifyPixel.r.toInt() +
+                      verifyPixel.g.toInt() +
+                      verifyPixel.b.toInt()) /
+                  3;
+              if (verifyBrightness < 45) darkCount++;
+            }
+            if (darkCount > (horizontalRadius * 2 + 1) * 0.7) {
+              consistentDark++;
+            }
           }
 
-          if (darkCount >= 10) {
+          if (consistentDark >= 15) {
             return y / height;
           }
         }
@@ -465,33 +557,8 @@ class ImageAnalyzer {
     double? manualGuinnessPosition,
   }) async {
     try {
-      // ALWAYS use Dart fallback when manual position is provided (for accurate comparison)
-      // Skip Android native to avoid comparison issues
-      if (false &&
-          (Platform.isAndroid || Platform.isIOS) &&
-          manualGuinnessPosition == null) {
-        try {
-          final level = await OpenCVService.analyzeImage(
-            imagePath,
-            manualGuinnessPosition: manualGuinnessPosition,
-          );
-          // Get positions from fallback for line display
-          final positions = await _getPositions(
-            imagePath,
-            manualGuinnessPosition: manualGuinnessPosition,
-          );
-          return AnalysisResult(
-            level: level,
-            darkLiquidTopPosition: positions['darkLiquidTop'] as double,
-            guinnessWordPosition: positions['guinnessWord'] as double,
-          );
-        } catch (e) {
-          print('Platform OpenCV failed, using fallback: $e');
-        }
-      }
-
-      // Always use Dart fallback when manual position is provided (more reliable)
-      print('Using Dart fallback (manual position provided or OpenCV failed)');
+      // Always use Dart fallback for accurate comparison and detection
+      print('Using Dart fallback for accurate detection');
 
       // Fallback: Advanced image processing
       return await _analyzeImageAdvancedFallback(
