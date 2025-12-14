@@ -44,9 +44,6 @@ dependencies:
   # OpenCV for Flutter
   opencv_dart: ^1.4.5
   
-  # Google ML Kit for accurate text detection (GUINNESS word)
-  google_mlkit_text_recognition: ^0.13.0
-  
   # Shared preferences for saving calibration
   shared_preferences: ^2.2.2
 
