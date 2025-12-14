@@ -246,73 +246,145 @@ class ImageAnalyzer {
     return 0.50;
   }
 
-  /// SUPER SIMPLE: Just find where BLACK liquid starts (from top)
+  /// IMPROVED: Multi-point sampling for accurate liquid detection
   static Map<String, double> _detectGlassParts(img.Image image) {
     final height = image.height;
     final width = image.width;
 
-    // Sample at CENTER - 50% width
-    final centerX = width ~/ 2;
+    // Sample at MULTIPLE vertical lines for better accuracy
+    final samplePositions = [
+      width * 0.45, // Left-center
+      width * 0.50, // Exact center
+      width * 0.55, // Right-center
+    ];
 
-    print('Simple detection at center: $centerX (width: $width)');
+    List<double> detectedPositions = [];
 
-    // Scan from TOP to BOTTOM - find where VERY DARK pixels start
-    // This is the top of black liquid (ignore foam completely)
+    for (double xRatio in samplePositions) {
+      final sampleX = xRatio.round().clamp(0, width - 1);
+      final position = _detectLiquidAtVerticalLine(image, sampleX, height);
+      if (position != null) {
+        detectedPositions.add(position);
+        print(
+          'Detected at X: $sampleX (${(xRatio / width * 100).toStringAsFixed(0)}%): ${(position * 100).toStringAsFixed(1)}%',
+        );
+      }
+    }
 
-    for (int y = (height * 0.2).round(); y < (height * 0.9).round(); y++) {
-      // Check multiple adjacent pixels at this row
-      int veryDarkCount = 0;
-      int totalChecked = 0;
+    // Use median for robustness (handles outliers)
+    if (detectedPositions.isNotEmpty) {
+      detectedPositions.sort();
+      final median = detectedPositions[detectedPositions.length ~/ 2];
+      print(
+        'Final liquid position (median): ${(median * 100).toStringAsFixed(1)}% from ${detectedPositions.length} samples',
+      );
+      return {'darkLiquidTop': median};
+    }
 
-      // Check 5 pixels horizontally around center
-      for (int xOffset = -10; xOffset <= 10; xOffset += 5) {
-        final checkX = (centerX + xOffset).clamp(0, width - 1);
-        final pixel = image.getPixel(checkX, y);
+    // Fallback
+    print('Liquid detection failed, using default 50%');
+    return {'darkLiquidTop': 0.50};
+  }
+
+  /// Detect liquid position at a specific vertical line
+  static double? _detectLiquidAtVerticalLine(
+    img.Image image,
+    int x,
+    int height,
+  ) {
+    // Scan from TOP to BOTTOM
+    // Strategy: Find foam first, then dark liquid below it
+
+    bool foundFoam = false;
+    int foamStartY = 0;
+
+    // Step 1: Find foam region (light/cream colored)
+    for (int y = (height * 0.1).round(); y < (height * 0.7).round(); y++) {
+      final pixel = image.getPixel(x, y);
+      final r = pixel.r.toInt();
+      final g = pixel.g.toInt();
+      final b = pixel.b.toInt();
+      final brightness = (r + g + b) / 3;
+
+      // Foam: light colored (brightness 100-220) with yellow/cream tint
+      if (!foundFoam && brightness > 100 && brightness < 220) {
+        // Check for cream/yellow tint (R+G > B)
+        if ((r + g) / 2 > b * 1.05) {
+          foundFoam = true;
+          foamStartY = y;
+          break;
+        }
+      }
+    }
+
+    // Step 2: If foam found, scan below it for dark liquid
+    if (foundFoam) {
+      for (int y = foamStartY; y < (height * 0.9).round(); y++) {
+        final pixel = image.getPixel(x, y);
         final r = pixel.r.toInt();
         final g = pixel.g.toInt();
         final b = pixel.b.toInt();
         final brightness = (r + g + b) / 3;
 
-        totalChecked++;
+        // Very dark = black liquid (Guinness)
+        if (brightness < 50) {
+          // Verify it's consistently dark for next 15 pixels
+          int darkCount = 0;
+          for (
+            int verifyY = y;
+            verifyY < (y + 15).clamp(0, height);
+            verifyY++
+          ) {
+            final verifyPixel = image.getPixel(x, verifyY);
+            final verifyBrightness =
+                (verifyPixel.r.toInt() +
+                    verifyPixel.g.toInt() +
+                    verifyPixel.b.toInt()) /
+                3;
+            if (verifyBrightness < 50) darkCount++;
+          }
 
-        // Very dark = black liquid (Guinness is almost black)
-        if (brightness < 40) {
-          veryDarkCount++;
-        }
-      }
-
-      // If majority of sampled pixels are very dark, this is liquid top
-      if (veryDarkCount >= 3) {
-        // Verify next few rows are also dark (consistent)
-        bool isConsistent = true;
-        for (int verifyY = y; verifyY < (y + 20).clamp(0, height); verifyY++) {
-          final verifyPixel = image.getPixel(centerX, verifyY);
-          final verifyBrightness =
-              (verifyPixel.r.toInt() +
-                  verifyPixel.g.toInt() +
-                  verifyPixel.b.toInt()) /
-              3;
-
-          // Should stay dark
-          if (verifyBrightness > 80) {
-            isConsistent = false;
-            break;
+          // Need at least 10 dark pixels out of 15 (consistent dark region)
+          if (darkCount >= 10) {
+            return y / height;
           }
         }
+      }
+    } else {
+      // No foam found - directly look for dark liquid from top
+      for (int y = (height * 0.2).round(); y < (height * 0.9).round(); y++) {
+        final pixel = image.getPixel(x, y);
+        final r = pixel.r.toInt();
+        final g = pixel.g.toInt();
+        final b = pixel.b.toInt();
+        final brightness = (r + g + b) / 3;
 
-        if (isConsistent) {
-          final position = y / height;
-          print(
-            'Found black liquid top at Y: $y (${(position * 100).toStringAsFixed(1)}%)',
-          );
-          return {'darkLiquidTop': position};
+        // Very dark = black liquid
+        if (brightness < 45) {
+          // Verify consistency
+          int darkCount = 0;
+          for (
+            int verifyY = y;
+            verifyY < (y + 15).clamp(0, height);
+            verifyY++
+          ) {
+            final verifyPixel = image.getPixel(x, verifyY);
+            final verifyBrightness =
+                (verifyPixel.r.toInt() +
+                    verifyPixel.g.toInt() +
+                    verifyPixel.b.toInt()) /
+                3;
+            if (verifyBrightness < 45) darkCount++;
+          }
+
+          if (darkCount >= 10) {
+            return y / height;
+          }
         }
       }
     }
 
-    // Fallback
-    print('Simple detection failed, using default 50%');
-    return {'darkLiquidTop': 0.50};
+    return null;
   }
 
   /// Compares GUINNESS word position and dark liquid level
