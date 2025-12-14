@@ -292,224 +292,231 @@ class _GuinnessAnalyzerPageState extends State<GuinnessAnalyzerPage> {
 
               // Selected image display with horizontal line overlay
               if (_selectedImage != null) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!, width: 2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        return FutureBuilder<Size>(
-                          future: _getImageSize(_selectedImage!),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return Image.file(
-                                _selectedImage!,
-                                fit: BoxFit.contain,
-                                height: 300,
-                              );
-                            }
-
-                            final imageSize = snapshot.data!;
-                            final containerWidth = constraints.maxWidth;
-                            final containerHeight = 300.0;
-
-                            // Calculate actual displayed image size (with BoxFit.contain)
-                            final imageAspectRatio =
-                                imageSize.width / imageSize.height;
-                            final containerAspectRatio =
-                                containerWidth / containerHeight;
-
-                            double displayedHeight;
-                            double displayedWidth;
-                            double offsetY = 0;
-                            double offsetX = 0;
-
-                            if (imageAspectRatio > containerAspectRatio) {
-                              // Image is wider - fit to width
-                              displayedWidth = containerWidth;
-                              displayedHeight =
-                                  containerWidth / imageAspectRatio;
-                              offsetY = (containerHeight - displayedHeight) / 2;
-                            } else {
-                              // Image is taller - fit to height
-                              displayedHeight = containerHeight;
-                              displayedWidth =
-                                  containerHeight * imageAspectRatio;
-                              offsetX = (containerWidth - displayedWidth) / 2;
-                            }
-
-                            return Stack(
-                              children: [
-                                Image.file(
+                Center(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!, width: 2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return FutureBuilder<Size>(
+                            future: _getImageSize(_selectedImage!),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData) {
+                                return Image.file(
                                   _selectedImage!,
                                   fit: BoxFit.contain,
                                   height: 300,
-                                ),
-                                // Horizontal line at dark liquid top position
-                                if (_darkLiquidTopPosition != null)
-                                  Positioned(
-                                    left: offsetX,
-                                    right: offsetX,
-                                    top:
-                                        offsetY +
-                                        (displayedHeight *
-                                            _darkLiquidTopPosition!),
-                                    child: Container(
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.red.withOpacity(0.5),
-                                            blurRadius: 4,
-                                            spreadRadius: 2,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 20,
-                                            height: 3,
-                                            color: Colors.red,
-                                          ),
-                                          Expanded(
-                                            child: Container(
-                                              height: 1,
+                                );
+                              }
+
+                              final imageSize = snapshot.data!;
+                              final containerWidth = constraints.maxWidth;
+                              final containerHeight = 300.0;
+
+                              // Calculate actual displayed image size (with BoxFit.contain)
+                              final imageAspectRatio =
+                                  imageSize.width / imageSize.height;
+                              final containerAspectRatio =
+                                  containerWidth / containerHeight;
+
+                              double displayedHeight;
+                              double displayedWidth;
+                              double offsetY = 0;
+                              double offsetX = 0;
+
+                              if (imageAspectRatio > containerAspectRatio) {
+                                // Image is wider - fit to width
+                                displayedWidth = containerWidth;
+                                displayedHeight =
+                                    containerWidth / imageAspectRatio;
+                                offsetY =
+                                    (containerHeight - displayedHeight) / 2;
+                              } else {
+                                // Image is taller - fit to height
+                                displayedHeight = containerHeight;
+                                displayedWidth =
+                                    containerHeight * imageAspectRatio;
+                                offsetX = (containerWidth - displayedWidth) / 2;
+                              }
+
+                              return Stack(
+                                children: [
+                                  Image.file(
+                                    _selectedImage!,
+                                    fit: BoxFit.contain,
+                                    height: 300,
+                                  ),
+                                  // Horizontal line at dark liquid top position
+                                  if (_darkLiquidTopPosition != null)
+                                    Positioned(
+                                      left: offsetX,
+                                      width: displayedWidth,
+                                      top:
+                                          offsetY +
+                                          (displayedHeight *
+                                              _darkLiquidTopPosition!),
+                                      child: Container(
+                                        height: 3,
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.red.withOpacity(
+                                                0.5,
+                                              ),
+                                              blurRadius: 4,
+                                              spreadRadius: 2,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: 20,
+                                              height: 3,
                                               color: Colors.red,
                                             ),
-                                          ),
-                                          Container(
-                                            width: 20,
-                                            height: 3,
-                                            color: Colors.red,
-                                          ),
-                                        ],
+                                            Expanded(
+                                              child: Container(
+                                                height: 1,
+                                                color: Colors.red,
+                                              ),
+                                            ),
+                                            Container(
+                                              width: 20,
+                                              height: 3,
+                                              color: Colors.red,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                // Green horizontal line at GUINNESS word position
-                                if (_guinnessWordPosition != null)
-                                  Positioned(
-                                    left: offsetX,
-                                    right: offsetX,
-                                    top:
-                                        offsetY +
-                                        (displayedHeight *
-                                            _guinnessWordPosition!),
-                                    child: Container(
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: Colors.green,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.green.withOpacity(
-                                              0.5,
+                                  // Green horizontal line at GUINNESS word position
+                                  if (_guinnessWordPosition != null)
+                                    Positioned(
+                                      left: offsetX,
+                                      width: displayedWidth,
+                                      top:
+                                          offsetY +
+                                          (displayedHeight *
+                                              _guinnessWordPosition!),
+                                      child: Container(
+                                        height: 3,
+                                        decoration: BoxDecoration(
+                                          color: Colors.green,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.green.withOpacity(
+                                                0.5,
+                                              ),
+                                              blurRadius: 4,
+                                              spreadRadius: 2,
                                             ),
-                                            blurRadius: 4,
-                                            spreadRadius: 2,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 20,
-                                            height: 3,
-                                            color: Colors.green,
-                                          ),
-                                          Expanded(
-                                            child: Container(
-                                              height: 1,
+                                          ],
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: 20,
+                                              height: 3,
                                               color: Colors.green,
                                             ),
-                                          ),
-                                          Container(
-                                            width: 20,
-                                            height: 3,
-                                            color: Colors.green,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                // Tap overlay for calibration
-                                if (_needsCalibration &&
-                                    _guinnessWordPosition == null)
-                                  Positioned.fill(
-                                    child: GestureDetector(
-                                      onTapDown: (details) {
-                                        // Calculate normalized Y position
-                                        final localY = details.localPosition.dy;
-                                        final normalizedY =
-                                            (localY - offsetY) /
-                                            displayedHeight;
-
-                                        if (normalizedY >= 0 &&
-                                            normalizedY <= 1) {
-                                          setState(() {
-                                            _guinnessWordPosition = normalizedY;
-                                            _needsCalibration = false;
-                                          });
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                '✓ GUINNESS position set at ${(normalizedY * 100).toStringAsFixed(1)}%',
-                                              ),
-                                              backgroundColor: Colors.green,
-                                              duration: const Duration(
-                                                seconds: 2,
+                                            Expanded(
+                                              child: Container(
+                                                height: 1,
+                                                color: Colors.green,
                                               ),
                                             ),
-                                          );
-                                        }
-                                      },
-                                      child: Container(
-                                        color: Colors.black.withOpacity(0.3),
-                                        child: const Center(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.touch_app,
-                                                color: Colors.white,
-                                                size: 48,
-                                              ),
-                                              SizedBox(height: 10),
-                                              Text(
-                                                'TAP on GUINNESS word',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.bold,
-                                                  shadows: [
-                                                    Shadow(
-                                                      blurRadius: 10,
-                                                      color: Colors.black,
-                                                    ),
-                                                  ],
+                                            Container(
+                                              width: 20,
+                                              height: 3,
+                                              color: Colors.green,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  // Tap overlay for calibration
+                                  if (_needsCalibration &&
+                                      _guinnessWordPosition == null)
+                                    Positioned.fill(
+                                      child: GestureDetector(
+                                        onTapDown: (details) {
+                                          // Calculate normalized Y position
+                                          final localY =
+                                              details.localPosition.dy;
+                                          final normalizedY =
+                                              (localY - offsetY) /
+                                              displayedHeight;
+
+                                          if (normalizedY >= 0 &&
+                                              normalizedY <= 1) {
+                                            setState(() {
+                                              _guinnessWordPosition =
+                                                  normalizedY;
+                                              _needsCalibration = false;
+                                            });
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  '✓ GUINNESS position set at ${(normalizedY * 100).toStringAsFixed(1)}%',
+                                                ),
+                                                backgroundColor: Colors.green,
+                                                duration: const Duration(
+                                                  seconds: 2,
                                                 ),
                                               ),
-                                            ],
+                                            );
+                                          }
+                                        },
+                                        child: Container(
+                                          color: Colors.black.withOpacity(0.3),
+                                          child: const Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.touch_app,
+                                                  color: Colors.white,
+                                                  size: 48,
+                                                ),
+                                                SizedBox(height: 10),
+                                                Text(
+                                                  'TAP on GUINNESS word',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.bold,
+                                                    shadows: [
+                                                      Shadow(
+                                                        blurRadius: 10,
+                                                        color: Colors.black,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
-                            );
-                          },
-                        );
-                      },
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
